@@ -118,8 +118,6 @@ static void onActivate(GtkApplication* app, gpointer user_data) {
     g_signal_connect(G_OBJECT(widget_start), "clicked", G_CALLBACK(onStartCommand), window);
 
     gtk_widget_show_all(window);
-
-    if (system(""))
 }
 
 static void onChooseSource(GtkWidget* widget, GtkLabel* widget_source) {

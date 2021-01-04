@@ -3,13 +3,16 @@
 #include <stdio.h>
 #include <string.h>
 
-static void destroy(GtkWidget* widget, gpointer data);
-static void activate(GtkApplication* app, gpointer data);
-static void choose_source(GtkWidget* widget, GtkLabel* widget_source);
-static void choose_destination(GtkWidget* widget, GtkLabel* widget_destination);
+static void onDestroy(GtkWidget* widget, gpointer data);
+static void onActivate(GtkApplication* app, gpointer data);
+static void onChooseSource(GtkWidget* widget, GtkLabel* widget_source);
+static void onChooseDestination(GtkWidget* widget, GtkLabel* widget_destination);
+static void onStartCommand(GtkWidget* widget, GtkWindow* window);
 
-static char* video_source;
-static char* video_destination;
+void wrap(char* str, char* des);
+
+char* video_source = "";
+char* video_destination = "";
 
 int find_index(char* str, char target) {
     int index = -1;
@@ -43,18 +46,18 @@ int main(int argc, char* argv[]) {
     int status;
 
     app = gtk_application_new("me.asayah.fixer", G_APPLICATION_FLAGS_NONE);
-    g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
+    g_signal_connect(app, "activate", G_CALLBACK(onActivate), NULL);
     status = g_application_run(G_APPLICATION(app), argc, argv);
     g_object_unref(app);
 
     return status;
 }
 
-static void destroy(GtkWidget* widget, gpointer data) {
+static void onDestroy(GtkWidget* widget, gpointer data) {
     gtk_main_quit();
 }
 
-static void activate(GtkApplication* app, gpointer user_data) {
+static void onActivate(GtkApplication* app, gpointer user_data) {
     GtkWidget* window;
     GtkWidget* root;
     GtkWidget* widget_header;
@@ -109,25 +112,32 @@ static void activate(GtkApplication* app, gpointer user_data) {
     gtk_container_add(GTK_CONTAINER(window), root);
     gtk_container_set_border_width(GTK_CONTAINER(window), 16);
 
-    g_signal_connect(G_OBJECT(window), "destroy", G_CALLBACK(destroy), NULL);
-    g_signal_connect(G_OBJECT(widget_set_source), "clicked", G_CALLBACK(choose_source), widget_source);
-    g_signal_connect(G_OBJECT(widget_set_destination), "clicked", G_CALLBACK(choose_destination), widget_destination);
+    g_signal_connect(G_OBJECT(window), "destroy", G_CALLBACK(onDestroy), NULL);
+    g_signal_connect(G_OBJECT(widget_set_source), "clicked", G_CALLBACK(onChooseSource), widget_source);
+    g_signal_connect(G_OBJECT(widget_set_destination), "clicked", G_CALLBACK(onChooseDestination), widget_destination);
+    g_signal_connect(G_OBJECT(widget_start), "clicked", G_CALLBACK(onStartCommand), window);
 
     gtk_widget_show_all(window);
+
+    if (system(""))
 }
 
-static void choose_source(GtkWidget* widget, GtkLabel* widget_source) {
+static void onChooseSource(GtkWidget* widget, GtkLabel* widget_source) {
     GtkWindow* window = GTK_WINDOW(widget);
 
     GtkWidget* dialog;
     GtkFileChooserAction action = GTK_FILE_CHOOSER_ACTION_OPEN;
-    gint res;
+    GtkFileFilter* filter = gtk_file_filter_new();
+
+    gtk_file_filter_set_name(GTK_FILE_FILTER(filter), "MPEG4 Video");
+    gtk_file_filter_add_mime_type(GTK_FILE_FILTER(filter), "video/mp4");
 
     dialog = gtk_file_chooser_dialog_new("Choose Video Source", window, action, 
         GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL, GTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT, NULL);
 
-    res = gtk_dialog_run(GTK_DIALOG(dialog));
-    if (res == GTK_RESPONSE_ACCEPT) {
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
         GtkFileChooser* chooser = GTK_FILE_CHOOSER(dialog);
         video_source = gtk_file_chooser_get_filename(chooser);
 
@@ -137,23 +147,26 @@ static void choose_source(GtkWidget* widget, GtkLabel* widget_source) {
     g_object_unref(dialog);
 }
 
-static void choose_destination(GtkWidget* widget, GtkLabel* widget_destination) {
+static void onChooseDestination(GtkWidget* widget, GtkLabel* widget_destination) {
     GtkWindow* window = GTK_WINDOW(widget);
 
     GtkWidget* dialog;  
     GtkFileChooserAction action = GTK_FILE_CHOOSER_ACTION_SAVE;
-    gint res;
+    GtkFileFilter* filter = gtk_file_filter_new();
+
+    gtk_file_filter_set_name(GTK_FILE_FILTER(filter), "MPEG4 Video");
+    gtk_file_filter_add_mime_type(GTK_FILE_FILTER(filter), "video/mp4");
 
     dialog = gtk_file_chooser_dialog_new("Choose Video Destination", window, action, 
         GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL, GTK_STOCK_SAVE, GTK_RESPONSE_ACCEPT, NULL);
-    /*
-    gtk_file_chooser_set_current_folder (GTK_FILE_CHOOSER (dialog), default_folder_for_saving);
-    */
-    gtk_file_chooser_set_current_name (GTK_FILE_CHOOSER (dialog), get_filename(video_source));
-    
-    res = gtk_dialog_run(GTK_DIALOG(dialog));    
 
-    if (res == GTK_RESPONSE_ACCEPT) {
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+
+    if (video_source) {
+        gtk_file_chooser_set_current_name (GTK_FILE_CHOOSER (dialog), get_filename(video_source));
+    }
+    
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
         GtkFileChooser* chooser = GTK_FILE_CHOOSER(dialog);
         video_destination = gtk_file_chooser_get_filename(chooser);
 
@@ -161,4 +174,56 @@ static void choose_destination(GtkWidget* widget, GtkLabel* widget_destination) 
     }
     
     g_object_unref(dialog);
+}
+
+void onStartCommand(GtkWidget* widget, GtkWindow* window) {
+    GtkWindow* parent = GTK_WINDOW(window);
+    GtkWidget* dialog;
+
+    if (video_source[0] == '\0' || strlen(video_source) == 0) {
+        // video source is empty
+        dialog = gtk_message_dialog_new(parent, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "The video source is empty");
+        
+        if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_CLOSE) {
+            gtk_widget_destroy(dialog);
+        }
+        
+        return;
+    }
+
+    if (video_destination[0] == '\0' || strlen(video_destination) == 0) {
+        // video destination is empty
+        dialog = gtk_message_dialog_new(parent, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "The video destination is empty");
+                
+        if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_CLOSE) {
+            gtk_widget_destroy(dialog);
+        }
+
+        return;
+    }
+
+    char* first = "ffmpeg -y -i ";
+    char* second = " -c:v libx264 -c:a aac -strict experimental -tune fastdecode -pix_fmt yuv420p -b:a 192k -ar 48000 ";
+    char* command = calloc(1024, 1);
+
+    char* source = calloc(255, 1);
+    char* destination = calloc(255, 1);
+
+    wrap(video_source, source);
+    wrap(video_destination, destination);
+
+    strcpy(command, first);
+    strcat(command, source);
+    strcat(command, second);
+    strcat(command, destination);
+
+    system(command);
+}
+
+void wrap(char* str, char* des) {
+    char* target = calloc(255, 1);
+    strcpy(target, "'");
+    strcat(target, str);
+    strcat(target, "'");
+    strcat(des, target);
 }

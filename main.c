@@ -3,13 +3,36 @@
 #include <stdio.h>
 #include <string.h>
 
+typedef struct MainWidgets {
+    GtkWidget *window;
+    GtkWidget *root;
+    GtkWidget *widget_header;
+    GtkWidget *widget_source;
+    GtkWidget *widget_destination;
+    GtkWidget *widget_set_source;
+    GtkWidget *widget_set_destination;
+    GtkWidget *widget_set_overwrite;
+    GtkWidget *widget_spacer;
+    GtkWidget *widget_output_hint;
+    GtkWidget *widget_output;
+    GtkWidget *widget_start;
+} CommandArgs ;
+
 static void onDestroy(GtkWidget* widget, gpointer data);
 static void onActivate(GtkApplication* app, gpointer data);
 static void onChooseSource(GtkWidget* widget, GtkLabel* widget_source);
 static void onChooseDestination(GtkWidget* widget, GtkLabel* widget_destination);
-static void onStartCommand(GtkWidget* widget, GtkWindow* window);
+static void onStartCommand(GtkWidget* widget, gpointer *data);
 
-void wrap(char* str, char* des);
+void wrap(char* source, char* destination) {
+    char* target = (char*) calloc(255, sizeof(char));
+    strcpy(target, "'");
+
+    strcat(target, source);
+    strcat(target, "'");
+    
+    strcpy(destination, target);
+}
 
 char* video_source = "";
 char* video_destination = "";
@@ -58,17 +81,17 @@ static void onDestroy(GtkWidget* widget, gpointer data) {
 }
 
 static void onActivate(GtkApplication* app, gpointer user_data) {
-    GtkWidget* window;
-    GtkWidget* root;
-    GtkWidget* widget_header;
-    GtkWidget* widget_source;
-    GtkWidget* widget_destination;
-    GtkWidget* widget_set_source;
-    GtkWidget* widget_set_destination;
-    GtkWidget* widget_spacer;
-    GtkWidget* widget_output_hint;
-    GtkWidget* widget_output;
-    GtkWidget* widget_start;
+    GtkWidget *window;
+    GtkWidget *root;
+    GtkWidget *widget_header;
+    GtkWidget *widget_source;
+    GtkWidget *widget_destination;
+    GtkWidget *widget_set_source;
+    GtkWidget *widget_set_destination;
+    GtkWidget *widget_spacer;
+    GtkWidget *widget_output_hint;
+    GtkWidget *widget_output;
+    GtkWidget *widget_start;
     
     window = gtk_application_window_new(app);
     root = gtk_grid_new();
@@ -112,10 +135,22 @@ static void onActivate(GtkApplication* app, gpointer user_data) {
     gtk_container_add(GTK_CONTAINER(window), root);
     gtk_container_set_border_width(GTK_CONTAINER(window), 16);
 
+    CommandArgs *args = g_new0(CommandArgs, 1);
+    args->window = window;
+    args->root = root;
+    args->widget_header = widget_header;
+    args->widget_source = widget_source;
+    args->widget_destination = widget_destination;
+    args->widget_set_source = widget_set_source;
+    args->widget_set_destination = widget_set_destination;
+    args->widget_spacer = widget_spacer;
+    args->widget_output_hint = widget_output_hint;
+    args->widget_output = widget_output;
+
     g_signal_connect(G_OBJECT(window), "destroy", G_CALLBACK(onDestroy), NULL);
     g_signal_connect(G_OBJECT(widget_set_source), "clicked", G_CALLBACK(onChooseSource), widget_source);
     g_signal_connect(G_OBJECT(widget_set_destination), "clicked", G_CALLBACK(onChooseDestination), widget_destination);
-    g_signal_connect(G_OBJECT(widget_start), "clicked", G_CALLBACK(onStartCommand), window);
+    g_signal_connect(G_OBJECT(widget_start), "clicked", G_CALLBACK(onStartCommand), args);
 
     gtk_widget_show_all(window);
 }
@@ -174,32 +209,48 @@ static void onChooseDestination(GtkWidget* widget, GtkLabel* widget_destination)
     g_object_unref(dialog);
 }
 
-void onStartCommand(GtkWidget* widget, GtkWindow* window) {
-    GtkWindow* parent = GTK_WINDOW(window);
-    GtkWidget* dialog;
+static void onStartCommand(GtkWidget* widget, gpointer *data) {
+    CommandArgs *args = (CommandArgs*) data;
 
-    if (video_source[0] == '\0' || strlen(video_source) == 0) {
-        // video source is empty
-        dialog = gtk_message_dialog_new(parent, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "The video source is empty");
-        
+    GtkWindow *window = GTK_WINDOW(args->window);
+    GtkWidget *widget_header = GTK_WIDGET(args->widget_header);
+    GtkWidget *widget_source = GTK_WIDGET(args->widget_source);
+    GtkWidget *widget_destination = GTK_WIDGET(args->widget_destination);
+    GtkWidget *widget_set_source = GTK_WIDGET(args->widget_set_source);
+    GtkWidget *widget_set_destination = GTK_WIDGET(args->widget_set_destination);
+    GtkWidget *widget_output_hint = GTK_WIDGET(args->widget_output_hint);
+    GtkWidget *widget_output = GTK_WIDGET(args->widget_output);
+
+    GtkWidget *dialog;
+    char ch;
+    FILE *_source, *_target;
+
+    if (strlen(video_source) == 0 || video_source[0] == '\0') {
+        dialog = gtk_message_dialog_new(window, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "The video source is empty");
+    
         if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_CLOSE) {
             gtk_widget_destroy(dialog);
         }
-        
         return;
     }
 
-    if (video_destination[0] == '\0' || strlen(video_destination) == 0) {
-        // video destination is empty
-        dialog = gtk_message_dialog_new(parent, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "The video destination is empty");
-                
+    if (strlen(video_destination) == 0 || video_destination[0] == '\0') {
+        dialog = gtk_message_dialog_new(window, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "The video destination is empty"); 
+
         if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_CLOSE) {
             gtk_widget_destroy(dialog);
         }
-
         return;
     }
 
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_header), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_source), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_destination), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_set_source), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_set_destination), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_output_hint), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_output), FALSE);
+    
     char* first = "ffmpeg -y -i ";
     char* second = " -c:v libx264 -c:a aac -strict experimental -tune fastdecode -pix_fmt yuv420p -b:a 192k -ar 48000 ";
     char* command = calloc(1024, 1);
@@ -215,13 +266,20 @@ void onStartCommand(GtkWidget* widget, GtkWindow* window) {
     strcat(command, second);
     strcat(command, destination);
 
-    system(command);
-}
+    int status = system(command);
+    if (status == 0) {
+        dialog = gtk_message_dialog_new(window, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE, "The video is successfully fixed");
 
-void wrap(char* str, char* des) {
-    char* target = calloc(255, 1);
-    strcpy(target, "'");
-    strcat(target, str);
-    strcat(target, "'");
-    strcat(des, target);
+        if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_CLOSE) {
+            gtk_widget_destroy(dialog);
+        }
+    }
+
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_header), TRUE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_source), TRUE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_destination), TRUE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_set_source), TRUE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_set_destination), TRUE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_output_hint), TRUE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widget_output), TRUE);
 }

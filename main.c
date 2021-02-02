@@ -2,6 +2,7 @@
 #include <syscall.h>
 #include <stdio.h>
 #include <string.h>
+#include <core.h>
 
 typedef struct MainWidgets {
     GtkWidget *window;
@@ -24,45 +25,8 @@ static void onChooseSource(GtkWidget* widget, GtkLabel* widget_source);
 static void onChooseDestination(GtkWidget* widget, GtkLabel* widget_destination);
 static void onStartCommand(GtkWidget* widget, gpointer *data);
 
-void wrap(char* source, char* destination) {
-    char* target = (char*) calloc(255, sizeof(char));
-    strcpy(target, "'");
-
-    strcat(target, source);
-    strcat(target, "'");
-    
-    strcpy(destination, target);
-}
-
 char* video_source = "";
 char* video_destination = "";
-
-int find_index(char* str, char target) {
-    int index = -1;
-
-    for (int i = 0; i < strlen(str); i++) {
-        if (str[i] == target)
-            index = i;
-    }
-    return index + 2;
-}
-
-const char* get_filename(char* source) {
-    int index = 0;
-    int length = strlen(source);
-    char* destination = malloc(sizeof(char) * 255); // 255 is the max char limit for filenames in ntfs and ext4
-
-    const char target_index = find_index(source, '/');
-    int i;
-
-    while (index < length) {
-        destination[index] = source[target_index + index - 1];
-        index++;
-    }
-    destination[index] = '\0';
-
-    return destination;
-}
 
 int main(int argc, char* argv[]) {
     GtkApplication *app;
@@ -92,6 +56,7 @@ static void onActivate(GtkApplication* app, gpointer user_data) {
     GtkWidget *widget_output_hint;
     GtkWidget *widget_output;
     GtkWidget *widget_start;
+    GtkWidget *widget_dialog;
     
     window = gtk_application_window_new(app);
     root = gtk_grid_new();
@@ -153,6 +118,8 @@ static void onActivate(GtkApplication* app, gpointer user_data) {
     g_signal_connect(G_OBJECT(widget_start), "clicked", G_CALLBACK(onStartCommand), args);
 
     gtk_widget_show_all(window);
+
+    verify_packages(window);
 }
 
 static void onChooseSource(GtkWidget* widget, GtkLabel* widget_source) {
@@ -223,6 +190,7 @@ static void onStartCommand(GtkWidget* widget, gpointer *data) {
 
     GtkWidget *dialog;
     char ch;
+    int status = -1;
     FILE *_source, *_target;
 
     if (strlen(video_source) == 0 || video_source[0] == '\0') {
@@ -251,22 +219,7 @@ static void onStartCommand(GtkWidget* widget, gpointer *data) {
     gtk_widget_set_sensitive(GTK_WIDGET(widget_output_hint), FALSE);
     gtk_widget_set_sensitive(GTK_WIDGET(widget_output), FALSE);
     
-    char* first = "ffmpeg -y -i ";
-    char* second = " -c:v libx264 -c:a aac -strict experimental -tune fastdecode -pix_fmt yuv420p -b:a 192k -ar 48000 ";
-    char* command = calloc(1024, 1);
-
-    char* source = calloc(255, 1);
-    char* destination = calloc(255, 1);
-
-    wrap(video_source, source);
-    wrap(video_destination, destination);
-
-    strcpy(command, first);
-    strcat(command, source);
-    strcat(command, second);
-    strcat(command, destination);
-
-    int status = system(command);
+    status = run(video_source, video_destination);
     if (status == 0) {
         dialog = gtk_message_dialog_new(window, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_CLOSE, "The video is successfully fixed");
 

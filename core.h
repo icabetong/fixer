@@ -1,3 +1,6 @@
+
+typedef enum _Packager { APT, YUM, UNKNOWN } Packager;
+
 void wrap(char* source, char* destination) {
     char* target = (char*) calloc(255, sizeof(char));
     strcpy(target, "'");
@@ -8,16 +11,8 @@ void wrap(char* source, char* destination) {
     strcpy(destination, target);
 }
 
-int verify_packages(GtkWidget *window) {
-    int package_installed = system("ffmpeg -h");
-    GtkWidget *widget;
-
-    widget = gtk_message_dialog_new(window, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_YES_NO, "ffmpeg package is not installed. Do you want to install it?");
-    
-    if (gtk_dialog_run(GTK_DIALOG(widget)) == GTK_RESPONSE_CLOSE) {
-        gtk_widget_destroy(widget);
-    }
-    return;
+int check() {
+    return system("ffmpeg -h");
 }
 
 int find_index(char* str, char target) {
@@ -64,4 +59,12 @@ const char* get_filename(char* source) {
     destination[index] = '\0';
 
     return destination;
+}
+
+Packager getSystemPackager() {
+    if (system("apt --help") == 0)
+        return APT;
+    else if (system("yum --help") == 0)
+        return YUM;
+    else return UNKNOWN;
 }

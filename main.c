@@ -119,7 +119,14 @@ static void onActivate(GtkApplication* app, gpointer user_data) {
 
     gtk_widget_show_all(window);
 
-    verify_packages(window);
+    if (check() == 0) {
+        GtkWidget* widget;
+
+        widget = gtk_message_dialog_new(window, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_YES_NO, "ffmpeg package is not installed. Do you want to install it?");
+        
+        if (gtk_dialog_run(GTK_DIALOG(widget)) == GTK_RESPONSE_CLOSE) 
+            gtk_widget_destroy(widget);
+    }
 }
 
 static void onChooseSource(GtkWidget* widget, GtkLabel* widget_source) {
